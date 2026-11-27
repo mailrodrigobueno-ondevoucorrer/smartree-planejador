@@ -1529,8 +1529,11 @@ document.addEventListener("submit", e => e.preventDefault());
 
 /* ---------- camada de dados: Supabase (login, banco, logos e downloads) ---------- */
 const CFG = window.SMARTREE_CONFIG || {};
-const configOk = !!(window.supabase && /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(String(CFG.supabaseUrl||"")) && String(CFG.supabaseAnonKey||"").length > 20);
-const sb = configOk ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}}) : null;
+/* aceita o endereço colado com caminho (ex.: .../rest/v1/) e usa só a origem */
+const SB_URL = (String(CFG.supabaseUrl||"").trim().match(/^https:\/\/[a-z0-9-]+\.supabase\.co/i) || [""])[0];
+const SB_KEY = String(CFG.supabaseAnonKey||"").trim();
+const configOk = !!(window.supabase && SB_URL && SB_KEY.length > 20);
+const sb = configOk ? window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}}) : null;
 const CORES_AVATAR = ["#2E7D4F","#5A2ED8","#9A6414","#B4313B","#1F6FB2","#7A4E2D"];
 function avatarDe(texto){
   const t = String(texto||"?").trim(), ini = (t.split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(p=>p[0]).join("") || "?").toUpperCase();
