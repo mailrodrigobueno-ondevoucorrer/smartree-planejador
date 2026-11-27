@@ -289,6 +289,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       if (!r.ok || String(j.success) !== "true") throw new Error(j.message || "falha");
       form.reset(); avisar("Mensagem enviada. Obrigado! Respondemos em breve.");
     } catch (err) {
+      if (/activ/i.test(err.message)) { avisar("Formulário aguardando ativação: o responsável pelo site precisa confirmar o e-mail enviado pelo FormSubmit.", true); return; }
       avisar("Não foi possível enviar agora. Tente de novo em alguns minutos.", true);
     } finally { enviar.disabled = false; enviar.textContent = "Enviar mensagem"; }
   });
