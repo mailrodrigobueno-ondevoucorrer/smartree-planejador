@@ -281,16 +281,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     const nome = (d.get("nome") || "").trim(), email = (d.get("email") || "").trim(), msg = (d.get("mensagem") || "").trim();
     if (!nome || !msg || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { avisar("Preencha nome, um e-mail válido e a mensagem.", true); return; }
     enviar.disabled = true; enviar.textContent = "Enviando...";
+    avisar("Enviando sua mensagem, aguarde alguns segundos...");
     try {
-      const r = await fetch(DESTINO, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ Nome: nome, Empresa: (d.get("empresa") || "").trim(), "E-mail": email, Perfil: d.get("perfil"), Mensagem: msg,
-          _replyto: email, _subject: "Novo contato pelo site SmarTree: " + nome, _template: "table", _captcha: "false" }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || String(j.success) !== "true") throw new Error(j.message || "falha");
+      // Envio simples (sem leitura da resposta): o FormSubmit entrega a mensagem, mas a resposta nem sempre chega ao navegador.
+      const corpo = new URLSearchParams({ Nome: nome, Empresa: (d.get("empresa") || "").trim(), "E-mail": email, Perfil: d.get("perfil") || "", Mensagem: msg,
+        _replyto: email, _subject: "Novo contato pelo site SmarTree: " + nome, _template: "table", _captcha: "false" });
+      await fetch(DESTINO, { method: "POST", mode: "no-cors", body: corpo });
       form.reset(); avisar("Mensagem enviada. Obrigado! Respondemos em breve.");
     } catch (err) {
-      if (/activ/i.test(err.message)) { avisar("Formulário aguardando ativação: o responsável pelo site precisa confirmar o e-mail enviado pelo FormSubmit.", true); return; }
-      avisar("Não foi possível enviar agora. Tente de novo em alguns minutos.", true);
+      avisar("Não foi possível enviar agora. Verifique sua conexão e tente de novo.", true);
     } finally { enviar.disabled = false; enviar.textContent = "Enviar mensagem"; }
   });
 })();
