@@ -81,9 +81,11 @@ Cada novo commit na branch `main` atualiza o site sozinho.
 
 ### 6. Liberar usuários de um publisher
 
-1. Envie o endereço do site para a pessoa.
-2. Ela entra com o e-mail, informa a empresa e clica em **Pedir acesso**.
-3. Em **Usuários › Aguardando acesso**, escolha o publisher e clique em **Liberar acesso**.
+**Convidar colaborador (recomendado):** em **Usuários › Convidar colaborador**, informe o e-mail e o publisher e clique em **Enviar convite**. A pessoa recebe o link de acesso e entra direto no publisher. Se o e-mail não sair (limite de envios), use **Reenviar link** ou peça para a pessoa entrar pelo endereço do site: o convite é aplicado no primeiro acesso.
+
+**Pedido de acesso:** quem entra sem convite informa a empresa e clica em **Pedir acesso**. Em **Usuários › Aguardando acesso**, escolha o publisher e clique em **Liberar acesso**.
+
+> Projetos criados antes dos convites: rode uma vez [`supabase/migracoes/002_convites.sql`](supabase/migracoes/002_convites.sql) no SQL Editor.
 
 ### 7. Domínio próprio
 

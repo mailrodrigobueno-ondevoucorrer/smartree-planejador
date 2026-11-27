@@ -71,7 +71,7 @@ const novoPublisher = (nome, dominio) => ({marca:MARCA_PADRAO(), auto:AUTO_PADRA
 const S = {
   db:null, user:null, dl:null, canEdit:false, canWrite:true, dbOff:false, loading:true, loadSlow:false,
   publishers:{}, planos:[], pubId:lsGet("pp:pub"), view:"planejar",
-  role:"carregando", me:null, perfil:null, perfis:[], room:null, assets:null, acessos:[], peers:[], preview:false, uMsg:"", confirmRm:null, pedido:null,
+  role:"carregando", me:null, perfil:null, perfis:[], convites:[], confirmConv:null, room:null, assets:null, acessos:[], peers:[], preview:false, uMsg:"", confirmRm:null, pedido:null,
   ufs:new Set(), segs:new Set(), modoSeg:"todos", fmtsSel:null, mergeSel:new Set(), mix:{}, cpm:{}, filtro:"todos", busca:"", confirmDel:null,
   draft:null, draftFor:null, dirty:false, imp:null, creating:false, pubMsg:"", saveMsg:""
 };
@@ -1393,13 +1393,19 @@ async function renderUsuarios(){
   box.innerHTML = `<div class="pubview">
     <div class="result-head"><h2>Usuários e acessos</h2></div>
     <div class="status ${S.uMsg.startsWith("Não")?"bad":"ok"}">${esc(S.uMsg)}</div>
-    <div class="panel section"><h3>Como dar acesso a alguém do publisher</h3>
-      <ol class="passos">
-        <li>Envie o endereço do planejador para a pessoa.</li>
-        <li>Ela entra com o próprio e-mail (recebe um link de acesso), informa a empresa e clica em <b>Pedir acesso</b>.</li>
-        <li>O pedido aparece abaixo, em <b>Aguardando acesso</b>. Escolha o publisher e clique em <b>Liberar acesso</b>. Ela clica em Verificar acesso e entra com a marca e os dados do publisher.</li>
-      </ol>
-      <p class="note">Cada usuário lê só o publisher liberado para ele; o banco recusa qualquer outra leitura. Usuários de publisher montam, salvam, aprovam e exportam as propostas do próprio publisher.</p>
+    <div class="panel section"><h3>Convidar colaborador</h3>
+      <p class="note">A pessoa recebe por e-mail um link de acesso e entra direto no publisher escolhido, sem precisar pedir liberação.</p>
+      <form class="fields" id="conv-form" novalidate>
+        <label>E-mail do colaborador<input type="email" id="conv-email" autocomplete="off" placeholder="nome@empresa.com.br" value="${esc(S.convEmail||"")}"></label>
+        <label>Publisher<select class="in" id="conv-pub">${optsPub(S.convPub || S.pubId)}</select></label>
+        <label style="justify-content:flex-end"><button class="btn primary" type="submit" id="btn-convidar">Enviar convite</button></label>
+      </form>
+      ${S.convites.length ? `<div><b>Convites aguardando o primeiro acesso</b><div class="tablebox" style="margin-top:8px"><table class="users"><thead><tr><th>E-mail</th><th>Publisher</th><th>Enviado em</th><th class="num">Ações</th></tr></thead><tbody>${S.convites.map(c => `<tr>
+        <td>${esc(c.email)}</td><td>${esc((S.publishers[c.publisher_id]||{}).nome || c.publisher_id)}</td><td>${esc(fmtData(c.criado_em))}</td>
+        <td class="num"><div class="rowact"><button class="btn sm" data-reenviar="${esc(c.email)}">Reenviar link</button>${S.confirmConv===c.email ? `<button class="btn sm danger" data-cancconv="${esc(c.email)}" data-confirm="1">Confirmar cancelamento</button>` : `<button class="btn sm" data-cancconv="${esc(c.email)}">Cancelar convite</button>`}</div></td></tr>`).join("")}</tbody></table></div></div>` : ""}
+    </div>
+    <div class="panel section"><h3>Pedidos de acesso</h3>
+      <p class="note">Quem entra no planejador sem convite pode pedir acesso informando a empresa. Os pedidos aparecem em <b>Aguardando acesso</b>: escolha o publisher e clique em <b>Liberar acesso</b>. Cada usuário lê só o publisher liberado para ele; o banco recusa qualquer outra leitura.</p>
     </div>
     <div class="panel section"><h3>Aguardando acesso</h3><div id="u-pend"><p class="note">Carregando…</p></div></div>
     <div class="panel section"><h3>Usuários com acesso <span class="chip">${lista.length}</span></h3>
@@ -1435,6 +1441,16 @@ document.addEventListener("click", e => {
     const uid = t.dataset.conceder, sel = document.getElementById("pd-"+uid), pid = sel && sel.value;
     t.disabled = true;
     concederAcesso(uid, pid, t.dataset.emp).then(ok => { S.uMsg = ok ? `Acesso a ${S.publishers[pid].nome} liberado.` : "Não foi possível liberar o acesso agora."; renderUsuarios(); });
+    return;
+  }
+  if(t.dataset.reenviar){
+    t.disabled = true;
+    DATA.enviarLink(t.dataset.reenviar).then(err => { S.uMsg = err ? "Não foi possível reenviar agora (limite de envios do Supabase). Tente em alguns minutos." : `Link reenviado para ${t.dataset.reenviar}.`; renderUsuarios(); });
+    return;
+  }
+  if(t.dataset.cancconv){
+    if(!t.dataset.confirm){ S.confirmConv = t.dataset.cancconv; renderUsuarios(); return; }
+    DATA.cancelarConvite(t.dataset.cancconv).then(ok => { S.uMsg = ok ? "Convite cancelado." : "Não foi possível cancelar agora."; S.confirmConv = null; renderUsuarios(); });
     return;
   }
   if(t.dataset.rmacesso){
@@ -1482,6 +1498,7 @@ document.addEventListener("input", e => {
     S.saveMsg = ""; atualizarHints(); renderResult(); return;
   }
   if(t.id==="f-busca"){ S.busca = t.value; renderSalvos(); return; }
+  if(t.id==="conv-email"){ S.convEmail = t.value; return; }
   if(t.id==="u-busca"){ S.uBusca = t.value.trim(); buscarPessoas(S.uBusca); return; }
   if(S.draft && t.closest("#view-publisher")){
     if(t.name==="automodo") return;
@@ -1525,7 +1542,14 @@ document.addEventListener("change", e => {
   if(t.dataset.atrib!=null && S.imp){ S.imp.atrib[t.dataset.atrib] = t.value || undefined; if(!t.value) delete S.imp.atrib[t.dataset.atrib]; agregar(); renderPublisher(); return; }
 });
 
-document.addEventListener("submit", e => e.preventDefault());
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  if(e.target.id==="conv-form"){
+    const btn = $("#btn-convidar"), email = $("#conv-email").value, pid = $("#conv-pub").value;
+    S.convEmail = email; S.convPub = pid; btn.disabled = true; btn.textContent = "Enviando…";
+    DATA.convidar(email, pid).then(r => { S.uMsg = r.ok ? r.msg : "Não foi possível convidar: " + r.msg; if(r.ok) S.convEmail = ""; renderUsuarios(); });
+  }
+});
 
 /* ---------- camada de dados: Supabase (login, banco, logos e downloads) ---------- */
 const CFG = window.SMARTREE_CONFIG || {};
@@ -1533,7 +1557,7 @@ const CFG = window.SMARTREE_CONFIG || {};
 const SB_URL = (String(CFG.supabaseUrl||"").trim().match(/^https:\/\/[a-z0-9-]+\.supabase\.co/i) || [""])[0];
 const SB_KEY = String(CFG.supabaseAnonKey||"").trim();
 const configOk = !!(window.supabase && SB_URL && SB_KEY.length > 20);
-const sb = configOk ? window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}}) : null;
+const sb = configOk ? window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:"implicit"}}) : null;
 const CORES_AVATAR = ["#2E7D4F","#5A2ED8","#9A6414","#B4313B","#1F6FB2","#7A4E2D"];
 function avatarDe(texto){
   const t = String(texto||"?").trim(), ini = (t.split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(p=>p[0]).join("") || "?").toUpperCase();
@@ -1562,6 +1586,8 @@ async function recarregarAcessos(){
   const [a, p] = await Promise.all([sb.from("acessos").select("user_id,publisher_id,concedido_em"), sb.from("perfis").select("id,email,nome,empresa,admin,criado_em").order("criado_em", {ascending:false})]);
   if(!a.error) S.acessos = a.data.map(row => ({id:row.user_id, publisherId:row.publisher_id, concedidoEm:row.concedido_em}));
   if(!p.error) S.perfis = p.data;
+  const c = await sb.from("convites").select("email,publisher_id,criado_em").order("criado_em", {ascending:false});
+  S.convites = c.error ? [] : c.data;
   if(S.view==="usuarios") renderUsuarios();
 }
 const TABELA = {planos:"propostas", publishers:"publishers", acessos:"acessos"};
@@ -1639,6 +1665,30 @@ const DATA = {
     await carregarSessao();
   },
   carregarSessao,
+  async enviarLink(email){
+    const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin + location.pathname, shouldCreateUser:true}});
+    return error ? (error.message || "erro") : null;
+  },
+  async convidar(email, pid){
+    email = String(email||"").trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return {ok:false, msg:"Informe um e-mail válido."};
+    if(!S.publishers[pid]) return {ok:false, msg:"Escolha o publisher."};
+    const existente = S.perfis.find(p => String(p.email||"").toLowerCase()===email);
+    if(existente && existente.admin) return {ok:false, msg:"Esse e-mail já é de um administrador."};
+    if(existente){
+      const r = await sb.from("acessos").upsert({user_id:existente.id, publisher_id:pid, concedido_em:new Date().toISOString()});
+      if(r.error) return {ok:false, msg:"Não foi possível liberar o acesso agora."};
+      const err = await DATA.enviarLink(email); await recarregarAcessos();
+      return {ok:true, msg: err ? `Acesso a ${S.publishers[pid].nome} liberado para ${email}. O e-mail com o link não saiu agora (limite de envios); peça para a pessoa entrar pelo endereço do planejador.` : `Acesso a ${S.publishers[pid].nome} liberado. Enviamos o link de acesso para ${email}.`};
+    }
+    const r = await sb.from("convites").upsert({email, publisher_id:pid, criado_em:new Date().toISOString()});
+    if(r.error) return {ok:false, msg:"Não foi possível registrar o convite. Confira se o trecho de SQL dos convites foi rodado no Supabase."};
+    const err = await DATA.enviarLink(email); await recarregarAcessos();
+    return {ok:true, msg: err ? `Convite registrado para ${email}, mas o e-mail não saiu agora (limite de envios do Supabase). Use Reenviar link daqui a alguns minutos, ou peça para a pessoa entrar pelo endereço do planejador: o acesso a ${S.publishers[pid].nome} é liberado na hora.` : `Convite enviado para ${email}. Ao clicar no link do e-mail, a pessoa entra direto em ${S.publishers[pid].nome}.`};
+  },
+  async cancelarConvite(email){
+    const r = await sb.from("convites").delete().eq("email", email); await recarregarAcessos(); return !r.error;
+  },
   async entrar(email){
     const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin + location.pathname}});
     return error ? (error.message || "erro") : null;

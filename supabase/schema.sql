@@ -37,6 +37,13 @@ create table if not exists public.propostas (
 );
 create index if not exists propostas_publisher_idx on public.propostas(publisher_id);
 
+create table if not exists public.convites (
+  email         text primary key check (email = lower(email)),
+  publisher_id  text not null references public.publishers(id) on delete cascade,
+  convidado_por uuid default auth.uid() references public.perfis(id) on delete set null,
+  criado_em     timestamptz not null default now()
+);
+
 -- ---------- funções auxiliares ----------
 create or replace function public.eh_admin() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -48,11 +55,18 @@ language sql stable security definer set search_path = public as $$
   select publisher_id from public.acessos where user_id = auth.uid();
 $$;
 
--- perfil criado automaticamente no primeiro login
+-- perfil criado automaticamente no primeiro login (e acesso liberado se houver convite)
 create or replace function public.criar_perfil() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare v_pub text;
 begin
   insert into public.perfis (id, email) values (new.id, new.email) on conflict (id) do nothing;
+  select publisher_id into v_pub from public.convites where email = lower(new.email);
+  if v_pub is not null then
+    insert into public.acessos (user_id, publisher_id) values (new.id, v_pub)
+      on conflict (user_id) do update set publisher_id = excluded.publisher_id, concedido_em = now();
+    delete from public.convites where email = lower(new.email);
+  end if;
   return new;
 end; $$;
 drop trigger if exists ao_criar_usuario on auth.users;
@@ -77,6 +91,7 @@ alter table public.perfis     enable row level security;
 alter table public.publishers enable row level security;
 alter table public.acessos    enable row level security;
 alter table public.propostas  enable row level security;
+alter table public.convites   enable row level security;
 
 drop policy if exists perfis_ler    on public.perfis;
 drop policy if exists perfis_editar on public.perfis;
@@ -104,6 +119,9 @@ create policy propostas_editar  on public.propostas for update using (public.eh_
                                                       with check (public.eh_admin() or publisher_id = public.meu_publisher());
 create policy propostas_excluir on public.propostas for delete using (public.eh_admin() or publisher_id = public.meu_publisher());
 
+drop policy if exists convites_admin on public.convites;
+create policy convites_admin on public.convites for all using (public.eh_admin()) with check (public.eh_admin());
+
 -- ---------- logos dos publishers (leitura pública, envio só por admin) ----------
 insert into storage.buckets (id, name, public) values ('logos', 'logos', true) on conflict (id) do nothing;
 drop policy if exists logos_ler     on storage.objects;
@@ -117,7 +135,7 @@ create policy logos_excluir on storage.objects for delete using (bucket_id = 'lo
 
 -- ---------- permissões de acesso pela API (o site usa o papel "authenticated") ----------
 grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on public.perfis, public.publishers, public.acessos, public.propostas to authenticated;
+grant select, insert, update, delete on public.perfis, public.publishers, public.acessos, public.propostas, public.convites to authenticated;
 grant execute on function public.eh_admin(), public.meu_publisher() to authenticated;
 
 -- perfis de quem já tinha entrado antes desta estrutura existir
