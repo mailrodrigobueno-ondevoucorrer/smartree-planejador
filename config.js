@@ -4,6 +4,6 @@
    - supabaseAnonKey: a chave pública ("anon" / "publishable").
    NUNCA coloque aqui a chave "service_role" / "secret": este arquivo é público. */
 window.SMARTREE_CONFIG = {
-  supabaseUrl: "",
-  supabaseAnonKey: ""
+  supabaseUrl: "https://gxjnomqlekryssubmeyf.supabase.co/rest/v1/",
+  supabaseAnonKey: "sb_publishable_CvIbFbMojwmPrrxGiuLAbQ_pfSgU4NO"
 };
