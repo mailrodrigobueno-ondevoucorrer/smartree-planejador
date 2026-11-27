@@ -375,7 +375,7 @@ function ocupCell(l, r){
 }
 function render(){
   const pr = papel(), gate = !["admin","publisher"].includes(pr) || !!S.trocaSenha;
-  aplicarMarca(gate ? null : (S.view==="publisher" && S.draft && S.draftFor===S.pubId ? S.draft : curPub()));
+  aplicarMarca(gate ? (S.marcaPublica || null) : (S.view==="publisher" && S.draft && S.draftFor===S.pubId ? S.draft : curPub()));
   renderHeader();
   const vistas = pr==="admin" ? ["planejar","salvos","publisher","usuarios"] : ["planejar","salvos"];
   if(!gate && !vistas.includes(S.view)) S.view = "planejar";
@@ -446,7 +446,7 @@ function renderAcesso(){
   }
   if(S.role==="login"){
     const modo = S.loginModo || "entrar";
-    const titulo = {entrar:"Entrar no planejador", criar:"Criar conta", esqueci:"Recuperar senha"}[modo];
+    const titulo = {entrar: S.marcaPublica ? `Entrar no planejador da ${S.marcaPublica.nome}` : "Entrar no planejador", criar:"Criar conta", esqueci:"Recuperar senha"}[modo];
     box.innerHTML = `<div class="panel gate">
       <h2>${titulo}</h2>
       ${modo==="criar" ? `<p>Recebeu um convite? Crie sua conta com o <b>mesmo e-mail do convite</b> e você entra direto no seu publisher.</p>` : modo==="esqueci" ? `<p>Informe seu e-mail. Enviamos um link para você criar uma nova senha.</p>` : ""}
@@ -486,9 +486,18 @@ function renderAcesso(){
     };
     return;
   }
-  const emp = (S.perfil && S.perfil.empresa) || "";
+  if(S.role==="outro-publisher"){
+    const url = enderecoDoPublisher(S.pubCerto);
+    box.innerHTML = `<div class="panel gate"><h2>Este endereço é de outro publisher</h2>
+      <p>Seu acesso é ao planejador de outro publisher. Entre pelo seu endereço:</p>
+      <p><a class="btn primary" href="${esc(url)}">${esc(url.replace(/^https:\/\//,"").replace(/\/$/,""))}</a></p>
+      <p><button class="btn" id="btn-sair3">Sair</button></p></div>`;
+    $("#btn-sair3").onclick = () => DATA.sair();
+    return;
+  }
+  const emp = (S.perfil && S.perfil.empresa) || (S.marcaPublica && S.marcaPublica.nome) || "";
   box.innerHTML = `<div class="panel gate">
-    <h2>Você ainda não tem acesso a um publisher</h2>
+    <h2>Você ainda não tem acesso${S.marcaPublica ? ` ao planejador da ${esc(S.marcaPublica.nome)}` : " a um publisher"}</h2>
     <p>Você entrou como <b>${esc((S.me && S.me.email) || "")}</b>. O acesso é liberado pela equipe do planejador. Informe sua empresa para que ela identifique seu pedido.</p>
     <div class="row"><label>Empresa<input type="text" id="acc-emp" maxlength="80" placeholder="Ex.: MarketUP" value="${esc(emp)}"></label>
       <button class="btn primary" id="btn-pedir">${emp ? "Atualizar pedido" : "Pedir acesso"}</button></div>
@@ -1272,6 +1281,7 @@ function renderPublisher(){
     <div class="panel section"><h3>Dados do publisher</h3>
       <div class="fields">
         <label>Nome<input type="text" id="pd-nome" data-k="nome" value="${esc(d.nome)}" ${dis}></label>
+        <label>Endereço do planejador<input type="text" value="${esc(enderecoDoPublisher(S.pubId).replace(/\/$/,""))}" readonly aria-label="Endereço do planejador deste publisher"><span class="hint">Subdomínio com o mesmo nome do código do publisher (${esc(S.pubId||"")}).</span></label>
         <label>Domínio<input type="text" id="pd-dom" data-k="dominio" value="${esc(d.dominio)}" ${dis} placeholder="ex.: marketup.com.br"></label>
         <label>Contato comercial<input type="text" id="pd-contato" data-k="contato" value="${esc(d.contato)}" ${dis}></label>
         <label>Código de rede do GAM<input type="text" id="pd-net" data-k="networkCode" value="${esc(d.networkCode)}" ${dis} inputmode="numeric"><span class="hint">Usado na integração automática pela API.</span></label>
@@ -1408,12 +1418,12 @@ async function salvarPublisher(okMsg){
 }
 
 /* ---------- usuários (admin) ---------- */
-const enderecoSite = () => location.origin + location.pathname;
+const enderecoSite = pid => enderecoDoPublisher(pid);
 function textoConvite(email, pid, jaTemConta){
   const pub = (S.publishers[pid]||{}).nome || "seu publisher";
   return jaTemConta
-    ? `Olá! Seu acesso ao Planejador de Propostas da ${pub} foi liberado.\n\nAcesse ${enderecoSite()} e entre com o e-mail ${email} e a sua senha.`
-    : `Olá! Você foi convidado para o Planejador de Propostas da ${pub}.\n\n1. Acesse ${enderecoSite()}\n2. Clique em "Primeiro acesso? Criar conta"\n3. Use o e-mail ${email} e crie a sua senha\n\nVocê entra direto no planejador da ${pub}.`;
+    ? `Olá! Seu acesso ao Planejador de Propostas da ${pub} foi liberado.\n\nAcesse ${enderecoSite(pid)} e entre com o e-mail ${email} e a sua senha.`
+    : `Olá! Você foi convidado para o Planejador de Propostas da ${pub}.\n\n1. Acesse ${enderecoSite(pid)}\n2. Clique em "Primeiro acesso? Criar conta"\n3. Use o e-mail ${email} e crie a sua senha\n\nVocê entra direto no planejador da ${pub}.`;
 }
 const optsPub = sel => Object.keys(S.publishers).sort((a,b)=>String(S.publishers[a].nome).localeCompare(String(S.publishers[b].nome))).map(id=>`<option value="${esc(id)}"${id===sel?" selected":""}>${esc(S.publishers[id].nome)}</option>`).join("");
 async function perfis(ids){ if(!ids.length) return {}; return DATA.perfis(ids); }
@@ -1610,6 +1620,16 @@ document.addEventListener("submit", e => {
 
 /* ---------- camada de dados: Supabase (login, banco, logos e downloads) ---------- */
 const CFG = window.SMARTREE_CONFIG || {};
+/* subdomínio do publisher: marketup.smartree.com.br → "marketup" (ou ?p=marketup para testes) */
+const DOMINIO_BASE = String(CFG.dominioBase || "").trim().toLowerCase().replace(/^\.+|\/+$/g, "");
+const SUBDOMINIO = (() => {
+  const reservados = ["app","www","admin","api"];
+  const h = location.hostname.toLowerCase();
+  if(DOMINIO_BASE && h.endsWith("." + DOMINIO_BASE)){ const sub = h.slice(0, -DOMINIO_BASE.length - 1); if(/^[a-z0-9-]{1,64}$/.test(sub) && !reservados.includes(sub)) return sub; }
+  const q = new URLSearchParams(location.search).get("p");
+  return q && /^[a-z0-9-]{1,64}$/.test(q) ? q : null;
+})();
+const enderecoDoPublisher = pid => DOMINIO_BASE && /^[a-z0-9-]{1,64}$/.test(String(pid||"")) ? `https://${pid}.${DOMINIO_BASE}/` : location.origin + location.pathname;
 /* aceita o endereço colado com caminho (ex.: .../rest/v1/) e usa só a origem */
 const SB_URL = (String(CFG.supabaseUrl||"").trim().match(/^https:\/\/[a-z0-9-]+\.supabase\.co/i) || [""])[0];
 const SB_KEY = String(CFG.supabaseAnonKey||"").trim();
@@ -1701,13 +1721,18 @@ async function carregarSessao(){
     S.perfil = perfil; S.me = {id:u.id, email:u.email, name:perfil.nome || String(u.email||"").split("@")[0], avatarUrl:avatarDe(perfil.nome || u.email)};
     if(perfil.admin){
       Object.assign(S, {role:"admin", canEdit:true, canWrite:true, assets:assetsSupabase});
+      if(SUBDOMINIO) S.pubId = SUBDOMINIO;
       await recarregarPublishers(); await Promise.all([recarregarPropostas(), recarregarAcessos()]);
     } else {
       const ac = await sb.from("acessos").select("publisher_id").eq("user_id", u.id).maybeSingle();
       if(!ac.data){ Object.assign(S, {role:"sem-acesso", publishers:{}, pubId:null, planos:[], canEdit:false, assets:null}); }
       else {
-        Object.assign(S, {role:"publisher", canEdit:false, canWrite:true, assets:null, preview:false, pubId:ac.data.publisher_id, view:"planejar"});
-        await recarregarPublishers(); S.pubId = ac.data.publisher_id; await recarregarPropostas();
+        if(SUBDOMINIO && DOMINIO_BASE && location.hostname.toLowerCase().endsWith("." + DOMINIO_BASE) && SUBDOMINIO !== ac.data.publisher_id){
+          Object.assign(S, {role:"outro-publisher", publishers:{}, pubId:null, planos:[], canEdit:false, assets:null, pubCerto:ac.data.publisher_id});
+        } else {
+          Object.assign(S, {role:"publisher", canEdit:false, canWrite:true, assets:null, preview:false, pubId:ac.data.publisher_id, view:"planejar"});
+          await recarregarPublishers(); S.pubId = ac.data.publisher_id; await recarregarPropostas();
+        }
       }
     }
     S.loading = false; renderMix(); atualizarHints(); render();
@@ -1717,6 +1742,7 @@ async function carregarSessao(){
 const DATA = {
   async iniciar(){
     if(!sb){ S.role = "config"; S.loading = false; render(); return; }
+    if(SUBDOMINIO){ try{ const r = await sb.rpc("marca_publica", {p_id:SUBDOMINIO}); if(!r.error && r.data && r.data.nome) S.marcaPublica = r.data; }catch(e){} }
     S.role = "carregando"; render();
     sb.auth.onAuthStateChange(ev => {
       if(ev==="PASSWORD_RECOVERY"){ S.trocaSenha = "recuperar"; setTimeout(() => carregarSessao().then(render), 0); return; }

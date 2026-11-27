@@ -14,7 +14,7 @@ Plataforma para publishers montarem propostas comerciais a partir do próprio in
 
 | Parte | Serviço | Papel |
 |---|---|---|
-| Site | GitHub Pages | Publica as telas a cada atualização do repositório |
+| Site | Cloudflare Pages (ou GitHub Pages para testes) | Publica as telas a cada atualização do repositório, com um subdomínio por publisher |
 | Login, banco e logos | Supabase | Usuários (login com e-mail e senha), publishers, propostas e arquivos de logo |
 | Inventário | Google Ad Manager | Relatório importado em CSV/Excel (atualização automática via Google Apps Script) |
 
@@ -56,13 +56,13 @@ window.SMARTREE_CONFIG = {
 
 A chave pública pode ficar no repositório: o que protege os dados são as regras de acesso do `schema.sql`.
 
-### 3. Publicação (GitHub Pages)
+### 3. Publicação de teste (GitHub Pages)
 
 1. No repositório, abra **Settings › Pages**.
 2. Em **Source**, escolha **Deploy from a branch**, branch **main**, pasta **/ (root)** e salve.
 3. Em um ou dois minutos o site fica disponível em `https://mailrodrigobueno-ondevoucorrer.github.io/smartree-planejador/`.
 
-Cada novo commit na branch `main` atualiza o site sozinho.
+Cada novo commit na branch `main` atualiza o site sozinho. Para testar a marca de um publisher nesse endereço, acrescente `?p=<código>` (ex.: `?p=marketup`). Para domínio próprio e subdomínios, veja o passo 7.
 
 ### 4. Primeiro administrador
 
@@ -87,11 +87,17 @@ Cada novo commit na branch `main` atualiza o site sozinho.
 
 > Projetos criados antes dos convites: rode uma vez [`supabase/migracoes/002_convites.sql`](supabase/migracoes/002_convites.sql) no SQL Editor.
 
-### 7. Domínio próprio
+### 7. Domínio e subdomínios por publisher (Cloudflare Pages)
 
-1. Em **Settings › Pages › Custom domain**, informe o domínio, por exemplo `app.smartree.com.br`, e ative **Enforce HTTPS**.
-2. No provedor do domínio, crie um registro **CNAME** de `app` apontando para `mailrodrigobueno-ondevoucorrer.github.io`.
-3. No Supabase, atualize **Site URL** e **Redirect URLs** com o novo endereço.
+Cada publisher abre no próprio subdomínio, com o código do publisher: `marketup.smartree.com.br`. O GitHub Pages aceita um único domínio por site; por isso a publicação com domínio próprio usa o **Cloudflare Pages** (gratuito, até 100 domínios por projeto), ligado a este mesmo repositório.
+
+1. **Cloudflare:** crie uma conta em [cloudflare.com](https://cloudflare.com), clique em **Add a domain**, informe `smartree.com.br` e escolha o plano **Free**.
+2. **Registro.br:** em **Domínios › smartree.com.br › DNS › Alterar servidores DNS**, troque pelos dois servidores que a Cloudflare indicar. A troca leva de minutos a algumas horas.
+3. **Projeto:** na Cloudflare, abra **Workers & Pages › Create › Pages › Connect to Git**, escolha este repositório, branch `main`, **Framework preset: None**, **Build command:** vazio, **Build output directory:** `/`. Clique em **Save and Deploy**.
+4. **Domínios:** no projeto, abra **Custom domains › Set up a custom domain** e adicione `app.smartree.com.br` (endereço do admin) e `marketup.smartree.com.br`. Para cada novo cliente, adicione `<código-do-publisher>.smartree.com.br`.
+5. **Supabase › Authentication › URL Configuration:** **Site URL** `https://app.smartree.com.br` e, em **Redirect URLs**, `https://*.smartree.com.br/**`.
+
+O `config.js` já traz `dominioBase: "smartree.com.br"`: o site reconhece o publisher pelo subdomínio, mostra o logo e as cores dele na tela de login e gera os convites com o endereço certo. Rode uma vez [`supabase/migracoes/003_marca_publica.sql`](supabase/migracoes/003_marca_publica.sql) em projetos criados antes desta função.
 
 ## Antes de vender: pontos de produção
 

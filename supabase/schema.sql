@@ -141,6 +141,14 @@ grant execute on function public.eh_admin(), public.meu_publisher() to authentic
 -- perfis de quem já tinha entrado antes desta estrutura existir
 insert into public.perfis (id, email) select id, email from auth.users on conflict (id) do nothing;
 
+-- ---------- marca do publisher na tela de login (só nome e identidade visual) ----------
+create or replace function public.marca_publica(p_id text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('nome', dados->>'nome', 'marca', coalesce(dados->'marca', '{}'::jsonb))
+  from public.publishers where id = p_id;
+$$;
+grant execute on function public.marca_publica(text) to anon, authenticated;
+
 -- ---------- primeiro administrador ----------
 -- Depois de entrar no site uma vez com o seu e-mail, rode (troque o e-mail):
 -- update public.perfis set admin = true where email = 'seu@email.com';
