@@ -99,6 +99,10 @@ Cada publisher abre no próprio subdomínio, com o código do publisher: `market
 
 O `config.js` já traz `dominioBase: "smartree.com.br"`: o site reconhece o publisher pelo subdomínio, mostra o logo e as cores dele na tela de login e gera os convites com o endereço certo. Rode uma vez [`supabase/migracoes/003_marca_publica.sql`](supabase/migracoes/003_marca_publica.sql) em projetos criados antes desta função.
 
+## Site institucional (smartree.com.br)
+
+A pasta [`site/`](site/) é o site institucional da SmarTree, independente do planejador. Ele é publicado num segundo projeto da Cloudflare apontando para esta pasta (raiz do projeto: `site`) e ligado a `smartree.com.br` e `www.smartree.com.br`. O arquivo `.assetsignore` impede que a pasta seja publicada junto com o planejador.
+
 ## Antes de vender: pontos de produção
 
 - **E-mails do sistema:** a recuperação de senha usa o envio padrão do Supabase, com limite baixo por hora. Configure um SMTP próprio em **Authentication › Emails › SMTP Settings** (por exemplo Resend, Brevo ou Amazon SES) com remetente do seu domínio e, depois, religue **Confirm email**: com a confirmação desligada, alguém que conheça o e-mail de um convite pendente poderia criar a conta antes da pessoa convidada.
