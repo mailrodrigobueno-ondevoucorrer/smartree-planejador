@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SmarTree · Planejador de Propostas</title>
+<meta name="description" content="Planejamento de propostas comerciais para publishers, com inventário do Google Ad Manager.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="previewbar" id="previewbar" hidden><div class="wrap"><span id="preview-txt"></span><button class="btn" id="btn-preview-sair" style="margin-left:auto">Voltar ao admin</button></div></div>
+<header class="top"><div class="wrap">
+  <div class="brand">
+    <img class="logo" id="brand-logo" alt="" hidden>
+    <span class="logotext" id="brand-text"></span>
+    <div class="sep" aria-hidden="true"></div>
+    <div><h1>Planejador de Propostas</h1><small id="brand-sub">Formatos, praças e segmentos · inventário do GAM</small></div>
+  </div>
+  <label class="pubpick" id="pubpick" hidden><span class="hint">Publisher</span><select id="pub-select" aria-label="Publisher"></select></label>
+  <span class="pubname" id="pub-static" hidden></span>
+  <nav class="tabs" role="tablist" id="tabs" hidden>
+    <button id="tab-planejar" role="tab" aria-selected="true" data-view="planejar">Nova proposta</button>
+    <button id="tab-salvos" role="tab" aria-selected="false" data-view="salvos">Propostas salvas<span class="count" id="saved-count"></span></button>
+    <button id="tab-publisher" role="tab" aria-selected="false" data-view="publisher">Configurar publisher</button>
+    <button id="tab-usuarios" role="tab" aria-selected="false" data-view="usuarios">Usuários</button>
+  </nav>
+  <div class="userchip" id="userchip"></div>
+</div></header>
+
+<main class="wrap">
+  <div id="sysmsg" class="sysmsg" hidden></div>
+
+  <section id="view-planejar">
+    <div class="grid">
+      <form class="panel steps" id="form" novalidate>
+        <div class="formhead"><h2>Dados da proposta</h2><span class="hint">Preencha de cima para baixo; a proposta abaixo se atualiza a cada alteração.</span></div>
+        <div class="step"><span class="n">1</span><div>
+          <label class="t" for="f-cliente">Anunciante</label>
+          <input type="text" id="f-cliente" autocomplete="off" placeholder="Nome do anunciante">
+          <div id="approved-banner" hidden></div>
+        </div></div>
+        <div class="step"><span class="n">2</span><div>
+          <span class="t">Período da campanha</span>
+          <div class="row2">
+            <div><label class="hint" for="f-inicio">Início</label><input type="date" id="f-inicio"></div>
+            <div><label class="hint" for="f-fim">Fim</label><input type="date" id="f-fim"></div>
+          </div>
+          <div class="hint" id="h-dias"></div>
+        </div></div>
+        <div class="step"><span class="n">3</span><div>
+          <label class="t" for="f-verba">Investimento (verba bruta)</label>
+          <input type="text" id="f-verba" inputmode="decimal" placeholder="R$ 0,00">
+          <div class="hint" id="h-verba"></div>
+        </div></div>
+        <div class="step wide"><span class="n">4</span><div>
+          <label class="t" for="f-contexto">Contexto da campanha</label>
+          <textarea id="f-contexto" maxlength="320" placeholder="Em até 2 frases: o que a campanha comunica e para quem."></textarea>
+          <div class="hint"><span id="h-frases">0 de 2 frases</span> · <span id="h-chars">0/320</span></div>
+          <div id="ctx-suggest" hidden></div>
+        </div></div>
+        <div class="step"><span class="n">5</span><div>
+          <span class="t">Praças</span>
+          <div class="seg" role="radiogroup" aria-label="Praças">
+            <input type="radio" name="praca" id="p-nacional" value="nacional" checked><label for="p-nacional">Nacional</label>
+            <input type="radio" name="praca" id="p-estados" value="estados"><label for="p-estados">Por estado</label>
+          </div>
+          <div id="uf-box" hidden>
+            <div class="regions" id="regions"></div>
+            <div class="ufgrid" id="ufgrid"></div>
+            <div class="hint" id="h-ufs" style="margin-top:6px"></div>
+          </div>
+        </div></div>
+        <div class="step" id="seg-step" hidden><span class="n">6</span><div>
+          <span class="t">Segmentos do sistema</span>
+          <div id="segbox"></div>
+          <div id="seg-suggest" hidden></div>
+        </div></div>
+        <div class="step"><span class="n" id="n-desc">6</span><div>
+          <label class="t" for="f-desc">Desconto da campanha (%)</label>
+          <input type="number" id="f-desc" min="0" max="100" step="1" value="0" inputmode="decimal">
+          <div class="hint" id="h-desc">Aplicado sobre o CPM tabela de todos os formatos.</div>
+        </div></div>
+        <div class="step"><span class="n" id="n-fsel">7</span><div>
+          <span class="t">Formatos</span>
+          <div id="fselbox"></div>
+        </div></div>
+      </form>
+      <div class="result" id="result" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="view-salvos" hidden>
+    <div class="saved-tools">
+      <input type="text" id="f-busca" placeholder="Filtrar por anunciante" aria-label="Filtrar por anunciante">
+      <span class="regions" style="margin:0">
+        <button class="btn sm" data-filter="todos">Todas</button>
+        <button class="btn sm" data-filter="aprovado">Aprovadas</button>
+        <button class="btn sm" data-filter="salvo">Aguardando aprovação</button>
+      </span>
+    </div>
+    <div class="tablebox" id="saved-box"></div>
+    <p class="note" style="margin-top:10px">A proposta aprovada vira o ponto de partida do anunciante: na próxima proposta para ele neste publisher, verba, praças, formatos e CPMs aprovados podem ser reaproveitados.</p>
+  </section>
+
+  <section id="view-publisher" hidden></section>
+  <section id="view-usuarios" hidden></section>
+  <section id="view-acesso" hidden></section>
+</main>
+
+<!-- Modelos de script do Google Apps Script (atualização automática do GAM) -->
+<script type="text/plain" id="tpl-mail">/**
+ * Planejador para Publisher · atualização automática do inventário (via e-mail do GAM)
+ * Publisher: {{PUB}}
+ *
+ * O Google Ad Manager envia o relatório agendado "{{RELATORIO}}" por e-mail (CSV).
+ * Este script procura o e-mail mais recente no Gmail, lê o anexo e grava
+ * na aba "{{ABA}}" desta planilha, no formato que o planejador importa.
+ * Não usa Google Cloud nem a API do Ad Manager.
+ */
+const ABA = '{{ABA}}';
+const BUSCA = 'has:attachment newer_than:45d subject:"{{RELATORIO}}"';
+
+function atualizarInventario() {
+  const conversas = GmailApp.search(BUSCA, 0, 10);
+  let msg = null;
+  conversas.forEach(function (c) {
+    c.getMessages().forEach(function (m) {
+      if (m.getAttachments().length && (!msg || m.getDate() > msg.getDate())) msg = m;
+    });
+  });
+  if (!msg) throw new Error('Nenhum e-mail do relatório "{{RELATORIO}}" com anexo nos últimos 45 dias. Confira o agendamento no GAM e o nome do relatório.');
+
+  const anexos = msg.getAttachments();
+  let arquivo = anexos.filter(function (a) { return /\.(csv|tsv|txt|zip|gz)$/i.test(a.getName()); })[0] || anexos[0];
+  let blob = arquivo.copyBlob();
+  if (/\.gz$/i.test(arquivo.getName())) blob = Utilities.ungzip(blob.setContentType('application/x-gzip'));
+  if (/\.zip$/i.test(arquivo.getName())) blob = Utilities.unzip(blob)[0];
+  const texto = blob.getDataAsString('UTF-8').replace(/^﻿/, '');
+  const primeira = texto.split('\n')[0];
+  const sep = primeira.indexOf('\t') >= 0 ? '\t' : (primeira.split(';').length > primeira.split(',').length ? ';' : ',');
+  const linhas = Utilities.parseCsv(texto, sep).filter(function (l) { return l.length > 1; });
+  if (linhas.length < 2) throw new Error('O anexo "' + arquivo.getName() + '" veio vazio ou não é CSV. No GAM, agende o relatório em formato CSV.');
+  const largura = linhas[0].length;
+  const dados = linhas.map(function (l) { while (l.length < largura) l.push(''); return l.slice(0, largura); });
+
+  const planilha = SpreadsheetApp.getActiveSpreadsheet();
+  const aba = planilha.getSheetByName(ABA) || planilha.insertSheet(ABA);
+  aba.clearContents();
+  aba.getRange(1, 1, dados.length, largura).setValues(dados);
+
+  const controle = planilha.getSheetByName('controle') || planilha.insertSheet('controle');
+  controle.getRange(1, 1, 2, 4).setValues([
+    ['Atualizado em', 'E-mail do GAM recebido em', 'Arquivo', 'Linhas'],
+    [new Date(), msg.getDate(), arquivo.getName(), dados.length - 1]
+  ]);
+}
+
+/** Rode uma vez para criar a atualização automática ({{FREQ_TXT}}, às {{HORA}}h). */
+function agendar() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  {{GATILHO}}
+}
+</script>
+<script type="text/plain" id="tpl-gas">/**
+ * Planejador para Publisher · atualização automática do inventário
+ * Publisher: {{PUB}} · rede do GAM {{REDE}}
+ *
+ * Roda o relatório dos últimos 30 dias no Google Ad Manager (API REST v1)
+ * e grava o resultado na aba "{{ABA}}" desta planilha, no formato
+ * que o planejador importa: bloco de anúncios, país, região, chave-valor
+ * e total de impressões.
+ */
+const REDE = '{{REDE}}';
+const ABA = '{{ABA}}';
+const API = 'https://admanager.googleapis.com/v1';
+
+function atualizarInventario() {
+  const props = PropertiesService.getScriptProperties();
+  let reportId = props.getProperty('REPORT_ID');
+  if (!reportId) {
+    const rel = chamar('post', '/networks/' + REDE + '/reports', {
+      displayName: 'Planejador para Publisher - inventario 30 dias',
+      visibility: 'HIDDEN',
+      reportDefinition: {
+        reportType: 'HISTORICAL',
+        dateRange: { relative: 'LAST_30_DAYS' },
+        dimensions: ['AD_UNIT_NAME_TOP_LEVEL', 'COUNTRY_NAME', 'REGION_NAME', 'KEY_VALUES_NAME'],
+        metrics: ['IMPRESSIONS']
+      }
+    });
+    reportId = String(rel.reportId);
+    props.setProperty('REPORT_ID', reportId);
+  }
+
+  let op = chamar('post', '/networks/' + REDE + '/reports/' + reportId + ':run', {});
+  for (let i = 0; i < 60 && !op.done; i++) {
+    Utilities.sleep(5000);
+    op = chamar('get', '/' + op.name);
+  }
+  if (!op.done) throw new Error('O relatório do GAM não terminou em 5 minutos.');
+  if (op.error) throw new Error('GAM: ' + JSON.stringify(op.error));
+
+  const resultado = op.response.reportResult;
+  const linhas = [['Bloco de anúncios (nível superior)', 'País', 'Região', 'Chave-valor', 'Total de impressões']];
+  let pagina = '';
+  do {
+    const r = chamar('get', '/' + resultado + ':fetchRows?pageSize=10000' + (pagina ? '&pageToken=' + encodeURIComponent(pagina) : ''));
+    (r.rows || []).forEach(function (row) {
+      const d = row.dimensionValues.map(function (v) { return v.stringValue || v.intValue || ''; });
+      const valores = (row.metricValueGroups[0] || {}).primaryValues || [];
+      d.push(Number((valores[0] || {}).intValue || 0));
+      linhas.push(d);
+    });
+    pagina = r.nextPageToken || '';
+  } while (pagina);
+
+  const planilha = SpreadsheetApp.getActiveSpreadsheet();
+  const aba = planilha.getSheetByName(ABA) || planilha.insertSheet(ABA);
+  aba.clearContents();
+  aba.getRange(1, 1, linhas.length, linhas[0].length).setValues(linhas);
+
+  const controle = planilha.getSheetByName('controle') || planilha.insertSheet('controle');
+  controle.getRange(1, 1, 2, 3).setValues([
+    ['Atualizado em', 'Dias no relatório', 'Linhas'],
+    [new Date(), 30, linhas.length - 1]
+  ]);
+}
+
+/** Rode uma vez para criar a atualização automática ({{FREQ_TXT}}, às {{HORA}}h). */
+function agendar() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  {{GATILHO}}
+}
+
+function chamar(metodo, caminho, corpo) {
+  const opcoes = {
+    method: metodo,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  };
+  if (corpo && metodo !== 'get') {
+    opcoes.contentType = 'application/json';
+    opcoes.payload = JSON.stringify(corpo);
+  }
+  const resp = UrlFetchApp.fetch(API + caminho, opcoes);
+  if (resp.getResponseCode() >= 300) {
+    throw new Error('GAM ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 500));
+  }
+  return JSON.parse(resp.getContentText());
+}
+</script>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
