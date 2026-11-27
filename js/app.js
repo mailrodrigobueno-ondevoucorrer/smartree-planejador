@@ -374,7 +374,7 @@ function ocupCell(l, r){
   return `<span class="meter"><span class="bar" title="Parte do limite entregável usada"><i class="${l.limitado?"hi":""}" style="width:${w}%"></i></span>${pct(l.ocup)}${l.limitado?` <span class="chip warn" title="Usa todo o inventário disponível para a campanha (${pct(r.fatorTeto)} do inventário)">no limite</span>`:""}</span>`;
 }
 function render(){
-  const pr = papel(), gate = !["admin","publisher"].includes(pr);
+  const pr = papel(), gate = !["admin","publisher"].includes(pr) || !!S.trocaSenha;
   aplicarMarca(gate ? null : (S.view==="publisher" && S.draft && S.draftFor===S.pubId ? S.draft : curPub()));
   renderHeader();
   const vistas = pr==="admin" ? ["planejar","salvos","publisher","usuarios"] : ["planejar","salvos"];
@@ -389,6 +389,7 @@ function render(){
 }
 function renderHeader(){
   const pr = papel(), pub = curPub();
+  if(S.avisoSenha){ const m = $("#sysmsg"); setTimeout(() => { if(S.avisoSenha){ m.hidden = false; m.textContent = S.avisoSenha; S.avisoSenha = ""; setTimeout(()=>{ m.hidden = true; }, 6000); } }, 0); }
   $("#pubpick").hidden = pr!=="admin";
   $("#pub-static").hidden = pr!=="publisher" || !pub; if(pub) $("#pub-static").textContent = pub.nome;
   $("#brand-sub").textContent = pr==="publisher" && pub ? `Propostas comerciais · ${pub.nome}` : "Formatos, praças e segmentos · inventário do GAM";
@@ -397,7 +398,7 @@ function renderHeader(){
   const uc = $("#userchip");
   if(S.me && S.me.id){
     const rot = S.role==="admin" ? "Admin" : S.role==="publisher" ? "Publisher" : "Sem acesso";
-    uc.innerHTML = `<img alt="" id="uc-img" title="${esc((S.me.name||"Você") + " · " + rot)}"><div><b id="uc-nome"></b><span>${esc(rot)}</span></div>${S.role==="admin" && !S.preview && pub ? `<button class="btn sm" id="btn-preview" title="Ver o planejador como um usuário deste publisher">Ver como publisher</button>` : ""}<button class="btn sm" id="btn-sair">Sair</button>`;
+    uc.innerHTML = `<img alt="" id="uc-img" title="${esc((S.me.name||"Você") + " · " + rot)}"><div><b id="uc-nome"></b><span>${esc(rot)}</span></div>${S.role==="admin" && !S.preview && pub ? `<button class="btn sm" id="btn-preview" title="Ver o planejador como um usuário deste publisher">Ver como publisher</button>` : ""}<button class="btn sm" id="btn-senha" title="Definir ou trocar sua senha">Senha</button><button class="btn sm" id="btn-sair">Sair</button>`;
     $("#uc-img").src = S.me.avatarUrl; $("#uc-nome").textContent = S.me.name || "Você";
   } else uc.innerHTML = "";
   if(pr==="admin"){
@@ -419,26 +420,70 @@ function renderAcesso(){
   const box = $("#view-acesso");
   if(S.role==="config"){ box.innerHTML = `<div class="panel gate"><h2>Configuração pendente</h2><p>Preencha o endereço e a chave pública do Supabase no arquivo <b>config.js</b> e publique de novo. O passo a passo está no README do repositório.</p></div>`; return; }
   if(S.role==="carregando"){ box.innerHTML = `<div class="panel gate"><h2>Carregando seu acesso…</h2><p class="note">Identificando sua conta e o publisher liberado para você.</p></div>`; return; }
-  if(S.role==="login"){
-    const enviado = !!S.loginEnviado;
+  if(S.trocaSenha){
     box.innerHTML = `<div class="panel gate">
-      <h2>Entrar no planejador</h2>
-      <p>Informe seu e-mail. Enviamos um link de acesso; não é preciso senha.</p>
-      <form class="row" id="login-form" novalidate><label>E-mail<input type="email" id="login-email" autocomplete="email" required value="${esc(S.loginEmail||"")}" ${enviado?"disabled":""}></label>
-        <button class="btn primary" id="btn-login" type="submit" ${enviado?"disabled":""}>${enviado?"Link enviado":"Receber link de acesso"}</button></form>
-      <div class="status ${enviado?"ok":""}" id="login-msg" aria-live="polite">${enviado ? `Enviamos o link para ${esc(S.loginEmail)}. Abra o e-mail neste aparelho e clique no link. Não chegou? Confira a caixa de spam.` : ""}</div>
-      ${enviado ? `<p><button class="linkbtn" id="btn-login-outro">Usar outro e-mail</button></p>` : ""}
+      <h2>${S.trocaSenha==="recuperar" ? "Crie uma nova senha" : "Definir senha"}</h2>
+      <p>${S.me && S.me.email ? `Conta: <b>${esc(S.me.email)}</b>. ` : ""}Use pelo menos 8 caracteres.</p>
+      <form class="gate-form" id="senha-form" novalidate>
+        <label>Nova senha<input type="password" id="ns-1" autocomplete="new-password" minlength="8" required></label>
+        <label>Repita a nova senha<input type="password" id="ns-2" autocomplete="new-password" minlength="8" required></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit" id="btn-ns">Salvar senha</button>${S.trocaSenha==="recuperar" ? "" : `<button class="btn" type="button" id="btn-ns-cancel">Cancelar</button>`}</div>
+      </form>
+      <div class="status" id="ns-msg" aria-live="polite"></div>
     </div>`;
-    const fm = $("#login-form"); if(fm) fm.onsubmit = async e => {
+    $("#senha-form").onsubmit = async e => {
       e.preventDefault();
-      const email = $("#login-email").value.trim(), msg = $("#login-msg");
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ msg.className = "status bad"; msg.textContent = "Informe um e-mail válido."; return; }
-      $("#btn-login").disabled = true; msg.className = "status"; msg.textContent = "Enviando…";
-      const err = await DATA.entrar(email);
-      if(err){ $("#btn-login").disabled = false; msg.className = "status bad"; msg.textContent = /rate|seconds/i.test(err) ? "Aguarde um minuto antes de pedir outro link." : "Não foi possível enviar o link agora. Tente de novo em instantes."; return; }
-      S.loginEnviado = true; S.loginEmail = email; renderAcesso();
+      const a = $("#ns-1").value, b = $("#ns-2").value, msg = $("#ns-msg");
+      if(a.length < 8){ msg.className = "status bad"; msg.textContent = "A senha precisa ter pelo menos 8 caracteres."; return; }
+      if(a !== b){ msg.className = "status bad"; msg.textContent = "As duas senhas não são iguais."; return; }
+      $("#btn-ns").disabled = true; msg.className = "status"; msg.textContent = "Salvando…";
+      const err = await DATA.definirSenha(a);
+      if(err){ $("#btn-ns").disabled = false; msg.className = "status bad"; msg.textContent = /different|same/i.test(err) ? "Use uma senha diferente da atual." : "Não foi possível salvar a senha agora. Tente de novo."; return; }
+      S.trocaSenha = null; S.uMsg = ""; await DATA.carregarSessao(); S.avisoSenha = "Senha salva. Nos próximos acessos, entre com e-mail e senha."; render();
     };
-    const ou = $("#btn-login-outro"); if(ou) ou.onclick = () => { S.loginEnviado = false; renderAcesso(); };
+    const c = $("#btn-ns-cancel"); if(c) c.onclick = () => { S.trocaSenha = null; render(); };
+    return;
+  }
+  if(S.role==="login"){
+    const modo = S.loginModo || "entrar";
+    const titulo = {entrar:"Entrar no planejador", criar:"Criar conta", esqueci:"Recuperar senha"}[modo];
+    box.innerHTML = `<div class="panel gate">
+      <h2>${titulo}</h2>
+      ${modo==="criar" ? `<p>Recebeu um convite? Crie sua conta com o <b>mesmo e-mail do convite</b> e você entra direto no seu publisher.</p>` : modo==="esqueci" ? `<p>Informe seu e-mail. Enviamos um link para você criar uma nova senha.</p>` : ""}
+      <form class="gate-form" id="login-form" novalidate>
+        <label>E-mail<input type="email" id="login-email" autocomplete="email" required value="${esc(S.loginEmail||"")}"></label>
+        ${modo!=="esqueci" ? `<label>Senha<input type="password" id="login-senha" autocomplete="${modo==="criar" ? "new-password" : "current-password"}" required></label>` : ""}
+        ${modo==="criar" ? `<label>Repita a senha<input type="password" id="login-senha2" autocomplete="new-password" required></label>` : ""}
+        <button class="btn primary" type="submit" id="btn-login">${{entrar:"Entrar", criar:"Criar conta", esqueci:"Enviar link"}[modo]}</button>
+      </form>
+      <div class="status ${S.loginOk?"ok":""}" id="login-msg" aria-live="polite">${esc(S.loginOk||"")}</div>
+      <div class="gate-links">${modo==="entrar" ? `<button class="linkbtn" data-lmodo="criar">Primeiro acesso? Criar conta</button><button class="linkbtn" data-lmodo="esqueci">Esqueci minha senha</button>` : `<button class="linkbtn" data-lmodo="entrar">Já tenho conta: entrar</button>`}</div>
+    </div>`;
+    document.querySelectorAll("[data-lmodo]").forEach(b => b.onclick = () => { S.loginModo = b.dataset.lmodo; S.loginOk = ""; S.loginEmail = $("#login-email").value.trim(); renderAcesso(); });
+    $("#login-form").onsubmit = async e => {
+      e.preventDefault();
+      const email = $("#login-email").value.trim().toLowerCase(), msg = $("#login-msg"), btn = $("#btn-login");
+      const ruim = t => { msg.className = "status bad"; msg.textContent = t; btn.disabled = false; };
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return ruim("Informe um e-mail válido.");
+      S.loginEmail = email; btn.disabled = true; msg.className = "status"; msg.textContent = "Aguarde…";
+      if(modo==="esqueci"){
+        const err = await DATA.esqueciSenha(email);
+        if(err) return ruim(/rate|seconds|limit/i.test(err) ? "Muitos pedidos seguidos. Aguarde alguns minutos e tente de novo." : "Não foi possível enviar agora. Tente de novo em instantes.");
+        S.loginOk = `Se ${email} tiver conta, enviamos o link para criar uma nova senha. Confira também a caixa de spam.`; S.loginModo = "entrar"; renderAcesso(); return;
+      }
+      const senha = $("#login-senha").value;
+      if(modo==="criar"){
+        if(senha.length < 8) return ruim("A senha precisa ter pelo menos 8 caracteres.");
+        if(senha !== $("#login-senha2").value) return ruim("As duas senhas não são iguais.");
+        const r = await DATA.criarConta(email, senha);
+        if(r.erro) return ruim(/registered|already/i.test(r.erro) ? "Este e-mail já tem conta. Use Entrar, ou Esqueci minha senha." : /password/i.test(r.erro) ? "Senha fraca. Use pelo menos 8 caracteres, misturando letras e números." : "Não foi possível criar a conta agora. Tente de novo.");
+        if(r.confirmar){ S.loginOk = `Conta criada. Enviamos um e-mail de confirmação para ${email}; confirme e depois entre com e-mail e senha.`; S.loginModo = "entrar"; renderAcesso(); }
+        return;
+      }
+      if(!senha) return ruim("Informe sua senha.");
+      const err = await DATA.entrar(email, senha);
+      if(err) return ruim(/invalid/i.test(err) ? "E-mail ou senha incorretos." : /confirm/i.test(err) ? "Confirme seu e-mail pelo link que enviamos e tente de novo." : "Não foi possível entrar agora. Tente de novo.");
+    };
     return;
   }
   const emp = (S.perfil && S.perfil.empresa) || "";
@@ -1363,6 +1408,13 @@ async function salvarPublisher(okMsg){
 }
 
 /* ---------- usuários (admin) ---------- */
+const enderecoSite = () => location.origin + location.pathname;
+function textoConvite(email, pid, jaTemConta){
+  const pub = (S.publishers[pid]||{}).nome || "seu publisher";
+  return jaTemConta
+    ? `Olá! Seu acesso ao Planejador de Propostas da ${pub} foi liberado.\n\nAcesse ${enderecoSite()} e entre com o e-mail ${email} e a sua senha.`
+    : `Olá! Você foi convidado para o Planejador de Propostas da ${pub}.\n\n1. Acesse ${enderecoSite()}\n2. Clique em "Primeiro acesso? Criar conta"\n3. Use o e-mail ${email} e crie a sua senha\n\nVocê entra direto no planejador da ${pub}.`;
+}
 const optsPub = sel => Object.keys(S.publishers).sort((a,b)=>String(S.publishers[a].nome).localeCompare(String(S.publishers[b].nome))).map(id=>`<option value="${esc(id)}"${id===sel?" selected":""}>${esc(S.publishers[id].nome)}</option>`).join("");
 async function perfis(ids){ if(!ids.length) return {}; return DATA.perfis(ids); }
 const pessoa = (p, extra) => `<div class="person"><img alt="" src="${esc(p && p.avatarUrl || "")}"><div><b>${esc((p && p.name) || "Usuário")}</b><span>${esc(extra || "")}</span></div></div>`;
@@ -1394,15 +1446,16 @@ async function renderUsuarios(){
     <div class="result-head"><h2>Usuários e acessos</h2></div>
     <div class="status ${S.uMsg.startsWith("Não")?"bad":"ok"}">${esc(S.uMsg)}</div>
     <div class="panel section"><h3>Convidar colaborador</h3>
-      <p class="note">A pessoa recebe por e-mail um link de acesso e entra direto no publisher escolhido, sem precisar pedir liberação.</p>
+      <p class="note">Registre o e-mail e o publisher e envie a mensagem gerada (WhatsApp ou e-mail). A pessoa cria a senha com esse e-mail e entra direto no publisher, sem precisar pedir liberação.</p>
       <form class="fields" id="conv-form" novalidate>
         <label>E-mail do colaborador<input type="email" id="conv-email" autocomplete="off" placeholder="nome@empresa.com.br" value="${esc(S.convEmail||"")}"></label>
         <label>Publisher<select class="in" id="conv-pub">${optsPub(S.convPub || S.pubId)}</select></label>
-        <label style="justify-content:flex-end"><button class="btn primary" type="submit" id="btn-convidar">Enviar convite</button></label>
+        <label style="justify-content:flex-end"><button class="btn primary" type="submit" id="btn-convidar">Registrar convite</button></label>
       </form>
+      ${S.convMsg ? `<div><div class="codehead"><b>Mensagem para enviar</b><button class="btn sm" data-copiarconv="1">Copiar mensagem</button></div><pre class="convmsg" id="conv-texto">${esc(S.convMsg)}</pre></div>` : ""}
       ${S.convites.length ? `<div><b>Convites aguardando o primeiro acesso</b><div class="tablebox" style="margin-top:8px"><table class="users"><thead><tr><th>E-mail</th><th>Publisher</th><th>Enviado em</th><th class="num">Ações</th></tr></thead><tbody>${S.convites.map(c => `<tr>
         <td>${esc(c.email)}</td><td>${esc((S.publishers[c.publisher_id]||{}).nome || c.publisher_id)}</td><td>${esc(fmtData(c.criado_em))}</td>
-        <td class="num"><div class="rowact"><button class="btn sm" data-reenviar="${esc(c.email)}">Reenviar link</button>${S.confirmConv===c.email ? `<button class="btn sm danger" data-cancconv="${esc(c.email)}" data-confirm="1">Confirmar cancelamento</button>` : `<button class="btn sm" data-cancconv="${esc(c.email)}">Cancelar convite</button>`}</div></td></tr>`).join("")}</tbody></table></div></div>` : ""}
+        <td class="num"><div class="rowact"><button class="btn sm" data-reenviar="${esc(c.email)}" data-pub="${esc(c.publisher_id)}">Copiar mensagem</button>${S.confirmConv===c.email ? `<button class="btn sm danger" data-cancconv="${esc(c.email)}" data-confirm="1">Confirmar cancelamento</button>` : `<button class="btn sm" data-cancconv="${esc(c.email)}">Cancelar convite</button>`}</div></td></tr>`).join("")}</tbody></table></div></div>` : ""}
     </div>
     <div class="panel section"><h3>Pedidos de acesso</h3>
       <p class="note">Quem entra no planejador sem convite pode pedir acesso informando a empresa. Os pedidos aparecem em <b>Aguardando acesso</b>: escolha o publisher e clique em <b>Liberar acesso</b>. Cada usuário lê só o publisher liberado para ele; o banco recusa qualquer outra leitura.</p>
@@ -1437,15 +1490,19 @@ document.addEventListener("click", e => {
   if(t.id==="btn-preview"){ S.preview = true; S.view = "planejar"; render(); return; }
   if(t.id==="btn-preview-sair"){ S.preview = false; render(); return; }
   if(t.id==="btn-sair"){ DATA.sair(); return; }
+  if(t.id==="btn-senha"){ S.trocaSenha = "trocar"; render(); return; }
   if(t.dataset.conceder){
     const uid = t.dataset.conceder, sel = document.getElementById("pd-"+uid), pid = sel && sel.value;
     t.disabled = true;
     concederAcesso(uid, pid, t.dataset.emp).then(ok => { S.uMsg = ok ? `Acesso a ${S.publishers[pid].nome} liberado.` : "Não foi possível liberar o acesso agora."; renderUsuarios(); });
     return;
   }
-  if(t.dataset.reenviar){
-    t.disabled = true;
-    DATA.enviarLink(t.dataset.reenviar).then(err => { S.uMsg = err ? "Não foi possível reenviar agora (limite de envios do Supabase). Tente em alguns minutos." : `Link reenviado para ${t.dataset.reenviar}.`; renderUsuarios(); });
+  if(t.dataset.reenviar){ S.convMsg = textoConvite(t.dataset.reenviar, t.dataset.pub); S.uMsg = ""; renderUsuarios(); return; }
+  if(t.dataset.copiarconv){
+    const pre = $("#conv-texto"), txt = pre.textContent;
+    const ok = () => { t.textContent = "Copiado"; setTimeout(()=>{ t.textContent = "Copiar mensagem"; }, 1500); };
+    const fb = () => { const sel = window.getSelection(), rg = document.createRange(); rg.selectNodeContents(pre); sel.removeAllRanges(); sel.addRange(rg); t.textContent = "Selecionado: use Ctrl+C"; };
+    try{ navigator.clipboard.writeText(txt).then(ok, fb); }catch(err){ fb(); }
     return;
   }
   if(t.dataset.cancconv){
@@ -1547,7 +1604,7 @@ document.addEventListener("submit", e => {
   if(e.target.id==="conv-form"){
     const btn = $("#btn-convidar"), email = $("#conv-email").value, pid = $("#conv-pub").value;
     S.convEmail = email; S.convPub = pid; btn.disabled = true; btn.textContent = "Enviando…";
-    DATA.convidar(email, pid).then(r => { S.uMsg = r.ok ? r.msg : "Não foi possível convidar: " + r.msg; if(r.ok) S.convEmail = ""; renderUsuarios(); });
+    DATA.convidar(email, pid).then(r => { S.uMsg = r.ok ? r.msg : "Não foi possível convidar: " + r.msg; if(r.ok){ S.convMsg = textoConvite(r.email, pid, r.jaTemConta); S.convEmail = ""; } renderUsuarios(); });
   }
 });
 
@@ -1661,14 +1718,13 @@ const DATA = {
   async iniciar(){
     if(!sb){ S.role = "config"; S.loading = false; render(); return; }
     S.role = "carregando"; render();
-    sb.auth.onAuthStateChange(ev => { if(ev==="SIGNED_IN" || ev==="SIGNED_OUT") setTimeout(carregarSessao, 0); });
+    sb.auth.onAuthStateChange(ev => {
+      if(ev==="PASSWORD_RECOVERY"){ S.trocaSenha = "recuperar"; setTimeout(() => carregarSessao().then(render), 0); return; }
+      if(ev==="SIGNED_IN" || ev==="SIGNED_OUT") setTimeout(carregarSessao, 0);
+    });
     await carregarSessao();
   },
   carregarSessao,
-  async enviarLink(email){
-    const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin + location.pathname, shouldCreateUser:true}});
-    return error ? (error.message || "erro") : null;
-  },
   async convidar(email, pid){
     email = String(email||"").trim().toLowerCase();
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return {ok:false, msg:"Informe um e-mail válido."};
@@ -1678,22 +1734,36 @@ const DATA = {
     if(existente){
       const r = await sb.from("acessos").upsert({user_id:existente.id, publisher_id:pid, concedido_em:new Date().toISOString()});
       if(r.error) return {ok:false, msg:"Não foi possível liberar o acesso agora."};
-      const err = await DATA.enviarLink(email); await recarregarAcessos();
-      return {ok:true, msg: err ? `Acesso a ${S.publishers[pid].nome} liberado para ${email}. O e-mail com o link não saiu agora (limite de envios); peça para a pessoa entrar pelo endereço do planejador.` : `Acesso a ${S.publishers[pid].nome} liberado. Enviamos o link de acesso para ${email}.`};
+      await recarregarAcessos();
+      return {ok:true, email, jaTemConta:true, msg:`${email} já tinha conta: acesso a ${S.publishers[pid].nome} liberado. Envie a mensagem abaixo para avisar.`};
     }
     const r = await sb.from("convites").upsert({email, publisher_id:pid, criado_em:new Date().toISOString()});
     if(r.error) return {ok:false, msg:"Não foi possível registrar o convite. Confira se o trecho de SQL dos convites foi rodado no Supabase."};
-    const err = await DATA.enviarLink(email); await recarregarAcessos();
-    return {ok:true, msg: err ? `Convite registrado para ${email}, mas o e-mail não saiu agora (limite de envios do Supabase). Use Reenviar link daqui a alguns minutos, ou peça para a pessoa entrar pelo endereço do planejador: o acesso a ${S.publishers[pid].nome} é liberado na hora.` : `Convite enviado para ${email}. Ao clicar no link do e-mail, a pessoa entra direto em ${S.publishers[pid].nome}.`};
+    await recarregarAcessos();
+    return {ok:true, email, jaTemConta:false, msg:`Convite registrado para ${email}. Envie a mensagem abaixo: ao criar a conta com esse e-mail, a pessoa entra direto em ${S.publishers[pid].nome}.`};
   },
   async cancelarConvite(email){
     const r = await sb.from("convites").delete().eq("email", email); await recarregarAcessos(); return !r.error;
   },
-  async entrar(email){
-    const {error} = await sb.auth.signInWithOtp({email, options:{emailRedirectTo: location.origin + location.pathname}});
+  async entrar(email, senha){
+    const {error} = await sb.auth.signInWithPassword({email, password:senha});
     return error ? (error.message || "erro") : null;
   },
-  async sair(){ await sb.auth.signOut(); S.loginEnviado = false; await carregarSessao(); },
+  async criarConta(email, senha){
+    const {data, error} = await sb.auth.signUp({email, password:senha, options:{emailRedirectTo: location.origin + location.pathname}});
+    if(error) return {erro: error.message || "erro"};
+    if(data && data.user && Array.isArray(data.user.identities) && data.user.identities.length===0) return {erro:"already registered"};
+    return {confirmar: !data.session};
+  },
+  async esqueciSenha(email){
+    const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
+    return error ? (error.message || "erro") : null;
+  },
+  async definirSenha(senha){
+    const {error} = await sb.auth.updateUser({password:senha});
+    return error ? (error.message || "erro") : null;
+  },
+  async sair(){ await sb.auth.signOut(); S.loginOk = ""; S.loginModo = "entrar"; S.trocaSenha = null; await carregarSessao(); },
   async pedirAcesso(empresa){
     const {error} = await sb.from("perfis").update({empresa}).eq("id", S.me.id);
     return !error;

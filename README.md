@@ -15,7 +15,7 @@ Plataforma para publishers montarem propostas comerciais a partir do próprio in
 | Parte | Serviço | Papel |
 |---|---|---|
 | Site | GitHub Pages | Publica as telas a cada atualização do repositório |
-| Login, banco e logos | Supabase | Usuários (login por link no e-mail), publishers, propostas e arquivos de logo |
+| Login, banco e logos | Supabase | Usuários (login com e-mail e senha), publishers, propostas e arquivos de logo |
 | Inventário | Google Ad Manager | Relatório importado em CSV/Excel (atualização automática via Google Apps Script) |
 
 Estrutura dos arquivos:
@@ -35,7 +35,7 @@ assets/               ícone
 
 1. Crie uma conta em [supabase.com](https://supabase.com) e um projeto novo (região **South America (São Paulo)**).
 2. Abra **SQL Editor › New query**, cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique em **Run**.
-3. Em **Authentication › Sign In / Providers**, deixe o provedor **Email** ativo.
+3. Em **Authentication › Sign In / Providers › Email**, deixe o provedor ativo e **desligue "Confirm email"**. Assim a conta funciona logo depois de criada, sem depender do envio de e-mail. Religue quando tiver SMTP próprio (veja "Antes de vender").
 4. Em **Authentication › URL Configuration**:
    - **Site URL:** o endereço do site (passo 3, por exemplo `https://mailrodrigobueno-ondevoucorrer.github.io/smartree-planejador/`).
    - **Redirect URLs:** o mesmo endereço. Quando tiver domínio próprio, acrescente-o aqui também.
@@ -66,7 +66,7 @@ Cada novo commit na branch `main` atualiza o site sozinho.
 
 ### 4. Primeiro administrador
 
-1. Abra o site, informe o seu e-mail e clique no link que chegar.
+1. Abra o site, clique em **Primeiro acesso? Criar conta** e crie a conta com o seu e-mail e uma senha.
 2. No Supabase, em **SQL Editor**, rode (com o seu e-mail):
    ```sql
    update public.perfis set admin = true where email = 'seu@email.com';
@@ -81,7 +81,7 @@ Cada novo commit na branch `main` atualiza o site sozinho.
 
 ### 6. Liberar usuários de um publisher
 
-**Convidar colaborador (recomendado):** em **Usuários › Convidar colaborador**, informe o e-mail e o publisher e clique em **Enviar convite**. A pessoa recebe o link de acesso e entra direto no publisher. Se o e-mail não sair (limite de envios), use **Reenviar link** ou peça para a pessoa entrar pelo endereço do site: o convite é aplicado no primeiro acesso.
+**Convidar colaborador (recomendado):** em **Usuários › Convidar colaborador**, informe o e-mail e o publisher e clique em **Registrar convite**. Copie a mensagem gerada e envie por WhatsApp ou e-mail. A pessoa cria a conta com esse e-mail e entra direto no publisher.
 
 **Pedido de acesso:** quem entra sem convite informa a empresa e clica em **Pedir acesso**. Em **Usuários › Aguardando acesso**, escolha o publisher e clique em **Liberar acesso**.
 
@@ -95,7 +95,7 @@ Cada novo commit na branch `main` atualiza o site sozinho.
 
 ## Antes de vender: pontos de produção
 
-- **E-mails de login:** o envio padrão do Supabase tem limite baixo por hora. Configure um SMTP próprio em **Authentication › Emails › SMTP Settings** (por exemplo Resend, Brevo ou Amazon SES) com remetente do seu domínio.
+- **E-mails do sistema:** a recuperação de senha usa o envio padrão do Supabase, com limite baixo por hora. Configure um SMTP próprio em **Authentication › Emails › SMTP Settings** (por exemplo Resend, Brevo ou Amazon SES) com remetente do seu domínio e, depois, religue **Confirm email**: com a confirmação desligada, alguém que conheça o e-mail de um convite pendente poderia criar a conta antes da pessoa convidada.
 - **Dados de clientes:** este repositório é público. Nunca grave aqui dados de publishers (inventário, planilhas, logos de clientes); eles ficam só no Supabase.
 - **Backup:** o plano gratuito do Supabase não tem backup diário automático; avalie o plano Pro quando houver clientes pagantes.
 - **Atualização automática do GAM:** hoje o script do Google Apps Script grava o relatório numa planilha e o inventário é importado em CSV. A próxima etapa é uma função no Supabase que busca o relatório e atualiza o inventário sozinha.

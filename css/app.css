@@ -183,3 +183,10 @@ details.howto ol{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:c
 .flow .st.on{border-color:var(--accent);background:var(--accent-soft)}
 ol.passos{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:80ch;font-size:13px}
 .codehead{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+
+.gate-form{display:flex;flex-direction:column;gap:12px;max-width:420px}
+.gate-form label{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px}
+.gate-form input[type=password]{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.gate-form .btn{align-self:flex-start}
+.gate-links{display:flex;gap:18px;flex-wrap:wrap}
+.convmsg{white-space:pre-wrap;background:var(--sunken);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;margin:0}
