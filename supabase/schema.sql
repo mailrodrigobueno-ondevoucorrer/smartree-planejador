@@ -115,6 +115,14 @@ create policy logos_inserir on storage.objects for insert with check (bucket_id 
 create policy logos_alterar on storage.objects for update using (bucket_id = 'logos' and public.eh_admin());
 create policy logos_excluir on storage.objects for delete using (bucket_id = 'logos' and public.eh_admin());
 
+-- ---------- permissões de acesso pela API (o site usa o papel "authenticated") ----------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.perfis, public.publishers, public.acessos, public.propostas to authenticated;
+grant execute on function public.eh_admin(), public.meu_publisher() to authenticated;
+
+-- perfis de quem já tinha entrado antes desta estrutura existir
+insert into public.perfis (id, email) select id, email from auth.users on conflict (id) do nothing;
+
 -- ---------- primeiro administrador ----------
 -- Depois de entrar no site uma vez com o seu e-mail, rode (troque o e-mail):
 -- update public.perfis set admin = true where email = 'seu@email.com';
